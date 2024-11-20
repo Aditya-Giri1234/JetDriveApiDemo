@@ -1,6 +1,12 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.jetbrains.kotlin.android)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt.plugin)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.kotlin.serialization.plugin)
+    id("kotlin-parcelize")
+    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -39,9 +45,9 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
-    }
+//    composeOptions {
+//        kotlinCompilerExtensionVersion = "1.5.1"
+//    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -66,4 +72,42 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    //Jetpack Compose recompose debugger by log
+    // Solution of this dependency available to all module :- https://stackoverflow.com/a/48443958/17464278
+    api("io.github.theapache64:rebugger:1.0.0-rc03")
+    api("androidx.compose.material:material-icons-extended:1.7.1")
+
+    //Google gson
+    implementation(libs.gson)
+
+    //Navigation
+    implementation(libs.androidx.navigation.compose)
+
+    //Coil
+    implementation(libs.coil.compose)
+
+    //For Compose Runtime Lifecycle support (collectAsStateWithLifecyle())
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    //retrofit
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+
+
+//    //Hilt
+    implementation(libs.hilt)
+    implementation(libs.hilt.navigation.compse)
+    ksp(libs.hilt.ksp)
+
+    //Kotlin - Serialization
+    implementation(libs.kotlin.serialization)
+
+    //Kotlin - reflection
+    api(libs.kotlin.reflect)
+
+    //Data Store Preference
+    implementation(libs.datastore)
 }
