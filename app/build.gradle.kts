@@ -1,3 +1,6 @@
+@file:Suppress("UnstableApiUsage")
+
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -6,12 +9,11 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization.plugin)
     id("kotlin-parcelize")
-    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
     namespace = "com.example.jetdrivedemoapi"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.jetdrivedemoapi"
@@ -26,6 +28,12 @@ android {
         }
     }
 
+    packaging {
+        resources {
+            excludes += "com.google.common.util.concurrent.ListenableFuture"
+            excludes += "META-INF/DEPENDENCIES"
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -110,4 +118,17 @@ dependencies {
 
     //Data Store Preference
     implementation(libs.datastore)
+
+    //gauva
+    implementation(libs.gauva)
+
+    //For Drive Api Use
+    implementation(libs.google.gms.play.services)
+    implementation(libs.google.api.client) {
+        exclude(group = "org.apache.httpcomponents", module = "guava-jdk5")
+    }
+    implementation(libs.google.api.drive) {
+        exclude(group = "org.apache.httpcomponents", module = "guava-jdk5")
+    }
+
 }
