@@ -89,6 +89,52 @@ object GoogleDriveManager {
         }
     }
 
+    //region:: Create Folders And Files
+
+    suspend fun createFolderInRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        folderName: String
+    ) = callbackFlow<UpdateResponse<DriveItem?>> {
+        val driveService = createDriveService(account, context)
+        try {
+            // Define a folder
+            val gFolder = com.google.api.services.drive.model.File().apply {
+                name = folderName // Folder name
+                mimeType = Constants.GOOGLE_FOLDER // MIME type for folders
+                parents = listOf("root") // Set parent as root to create in My Drive
+            }
+
+            // Create the folder in Drive
+            val createdFolder = driveService.files()
+                .create(gFolder)
+                .setFields("id, name, mimeType, createdTime, modifiedTime")
+                .execute()
+
+            // Return DriveItem representing the created folder
+            val item = DriveItem(
+                id = createdFolder.id,
+                name = createdFolder.name,
+                mimeType = createdFolder.mimeType,
+                size = 0, // Folders have no size
+                createdTime = createdFolder.createdTime.toString(),
+                modifiedTime = createdFolder.modifiedTime.toString()
+            )
+
+            trySend(UpdateResponse(true, item))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            trySend(UpdateResponse(false, null, e.message.toString()))
+        }
+
+
+        awaitClose {
+            close()
+        }
+    }
+
+    //endregion
+
 //region :: Get List of File and folder from drive api
 
     // Function to create Drive service using the signed-in GoogleSignInAccount
@@ -110,12 +156,13 @@ object GoogleDriveManager {
 
     // Function to get all files and folders from Google Drive using suspend and callbackFlow
     suspend fun getDriveFilesAndFolders(account: GoogleSignInAccount, context: Context) =
-        callbackFlow<ListenerEmissionType<DriveItem,DriveItem>> {
+        callbackFlow<ListenerEmissionType<DriveItem, DriveItem>> {
             val driveService = createDriveService(account, context)
 
             // Make request to list files and folders
             val request = driveService.files().list()
-                .setQ("trashed = false")  // Exclude trashed files
+//                .setQ("trashed = false")  // It will give whole files and folder in drive which one share or open or etc.
+                .setQ("'root' in parents and trashed = false")  // It will give files from My Drive Folder
                 .setSpaces("drive")
                 .setFields("nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime)")
                 .setPageSize(100)
@@ -134,7 +181,14 @@ object GoogleDriveManager {
                             modifiedTime = file.modifiedTime.toString()
                         )
                     }
-                    trySend(ListenerEmissionType(Constants.ListenerEmitType.Added, isEmissionForList = true , isFirstTime, responseList = driveItems))
+                    trySend(
+                        ListenerEmissionType(
+                            Constants.ListenerEmitType.Added,
+                            isEmissionForList = true,
+                            isFirstTime,
+                            responseList = driveItems
+                        )
+                    )
 
                     isFirstTime = false
                     request.pageToken = fileList.nextPageToken

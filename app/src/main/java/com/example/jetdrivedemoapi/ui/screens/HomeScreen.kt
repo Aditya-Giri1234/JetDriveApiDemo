@@ -3,6 +3,7 @@ package com.example.jetdrivedemoapi.ui.screens
 import android.app.Activity.RESULT_OK
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +17,15 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -28,6 +33,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,8 +54,11 @@ import com.example.jetdrivedemoapi.ui.components.common.MyTopBar
 import com.example.jetdrivedemoapi.ui.components.common.wrapper.IconWithoutDesc
 import com.example.jetdrivedemoapi.ui.navigation.AppNavigationScreens
 import com.example.jetdrivedemoapi.ui.viewmodels.HomeViewModel
+import com.example.jetdrivedemoapi.ui.widgets.home.FolderOrFileCreateDialog
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import kotlin.math.sign
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController = rememberNavController(),
@@ -65,9 +75,15 @@ fun HomeScreen(
             }
         }
 
+    val isFolderCreationOn = remember {
+        mutableStateOf(false)
+    }
     val signInStatus = homeViewModel.signInDrive.collectAsStateWithLifecycle(TaskResponse.Initial())
     val myDriveFiles =
         homeViewModel.myGoogleDriveFiles.collectAsStateWithLifecycle(TaskResponse.Initial())
+    val account = remember(signInStatus.value) {
+        mutableStateOf(signInStatus.value.data)
+    }
 
 
     LaunchedEffect(Unit) {
@@ -75,9 +91,8 @@ fun HomeScreen(
     }
 
     LaunchedEffect(signInStatus.value) {
-        val account = signInStatus.value.data
-        if (account != null) {
-            homeViewModel.getDriveFilesAndFolders(account, context)
+        if (account.value != null) {
+            homeViewModel.getDriveFilesAndFolders(account.value!!, context)
         }
     }
 
@@ -94,9 +109,19 @@ fun HomeScreen(
                     homeViewModel.singOutGoogleDrive(context)
                 }
             }
-        }
+        } ,
+        floatingActionButton = {
+            if(account.value!=null){
+                FloatingActionButton(onClick = {
+                    isFolderCreationOn.value = true
+                } , shape = CircleShape , containerColor = Color.Magenta) {
+                    IconWithoutDesc(Icons.Filled.Add , tint = Color.White)
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End
     ) { innerPadding ->
-        Surface(modifier = Modifier.padding(innerPadding)) {
+        Surface(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -106,8 +131,14 @@ fun HomeScreen(
             ) {
                 TopAppBarSetUp(navController, signInStatus, homeViewModel)
                 MainContent(navController, homeViewModel, myDriveFiles)
+                if(isFolderCreationOn.value){
+                    FolderOrFileCreateDialog(account = account.value!!,homeViewModel, onDismiss = {
+                        isFolderCreationOn.value = false
+                    } )
+                }
             }
         }
+
     }
 }
 
@@ -136,6 +167,7 @@ fun ColumnScope.MainContent(
                 )
             } else {
                 LazyVerticalGrid(
+                    modifier = Modifier.fillMaxSize(),
                     columns = GridCells.Fixed(3),
                     state = rememberLazyGridState(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -145,55 +177,29 @@ fun ColumnScope.MainContent(
                     flingBehavior = ScrollableDefaults.flingBehavior()
                 ) {
                     items(response.data) { item ->
-                        if (item.isFolder) {
-                            Column(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                IconWithoutDesc(
-                                    Icons.Filled.Folder,
-                                    tint = Color.Blue.copy(alpha = .7f),
-                                    Modifier.size(100.dp)
-                                )
-                                Text(
-                                    item.name,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(horizontal = 5.dp)
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 5.dp) ,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        } else {
-                            Column(
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                IconWithoutDesc(
-                                    Icons.Filled.FileOpen,
-                                    tint = Color.Blue.copy(alpha = .5f),
-                                    Modifier.size(100.dp)
-                                )
-                                Text(
-                                    item.name,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .padding(horizontal = 5.dp)
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 5.dp) ,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            IconWithoutDesc(
+                                Helper.getFileIcon(item.name,item.mimeType),
+                                tint = Helper.getFileTint(item.name,item.mimeType).copy(alpha = .7f),
+                                Modifier.size(80.dp)
+                            )
+                            Text(
+                                item.name,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .padding(horizontal = 5.dp)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }

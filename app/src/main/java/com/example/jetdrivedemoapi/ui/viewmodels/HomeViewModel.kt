@@ -12,6 +12,7 @@ import com.example.jetdrivedemoapi.common.utils.manager.SoftwareManager
 import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
 import com.example.jetdrivedemoapi.domain.repo.HomeRepository
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.android.gms.tasks.Task
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
@@ -41,6 +42,12 @@ class HomeViewModel @Inject constructor(
 
     val myGoogleDriveFiles get() = _myGoogleDriveFiles.asSharedFlow()
 
+    private val _folderCreate = MutableSharedFlow<TaskResponse<String>>(
+        0, 64, BufferOverflow.DROP_OLDEST
+    )
+
+    val folderCreate get() = _folderCreate.asSharedFlow()
+
 
     fun singInGoogleDrive(result: ActivityResult) = viewModelScope.launch(Dispatchers.IO) {
         _signInDriveStatus.tryEmit(TaskResponse.Loading())
@@ -61,6 +68,7 @@ class HomeViewModel @Inject constructor(
         if (SoftwareManager.isNetworkAvailable(app)) {
             val response = repo.signOutGoogleDrive(context).first()
             if (response.isSuccess) {
+                _myGoogleDriveFiles.tryEmit(TaskResponse.Initial())
                 _signInDriveStatus.tryEmit(TaskResponse.Success(response.data))
             } else {
                 _signInDriveStatus.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
@@ -120,5 +128,37 @@ class HomeViewModel @Inject constructor(
             }
         }
         _myGoogleDriveFiles.tryEmit(TaskResponse.Success(myDriveFile))
+    }
+
+    fun createFolderInRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        folderName: String
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        _folderCreate.tryEmit(TaskResponse.Loading())
+
+        if(SoftwareManager.isNetworkAvailable(app)){
+            val response = repo.createFolderInRootFolder(account, context, folderName).first()
+            if(response.isSuccess){
+                handleFolderCreationInRoot(response.data)
+            }else{
+                _folderCreate.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
+            }
+        }else{
+            _folderCreate.tryEmit(TaskResponse.Error("No Internet Available !"))
+        }
+    }
+
+    private fun handleFolderCreationInRoot(response: DriveItem?) {
+        val files = myGoogleDriveFiles.replayCache[0].data?.toMutableList() ?: mutableListOf()
+
+        if(response ==null){
+            _folderCreate.tryEmit(TaskResponse.Error("Something went wrong !"))
+        }else{
+            _folderCreate.tryEmit(TaskResponse.Success(""))
+            files.add(response)
+            files.sortByDescending { it.createdTime }
+            _myGoogleDriveFiles.tryEmit(TaskResponse.Success(files))
+        }
     }
 }

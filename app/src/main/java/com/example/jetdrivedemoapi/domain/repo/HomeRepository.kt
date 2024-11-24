@@ -16,4 +16,10 @@ class HomeRepository @Inject constructor() {
     fun checkLoginStatus(context : Context) : GoogleSignInAccount? = GoogleDriveManager.checkLoginStatus(context)
 
     suspend fun getDriveFilesAndFolders(account: GoogleSignInAccount, context: Context) = GoogleDriveManager.getDriveFilesAndFolders(account,context)
+
+    suspend fun createFolderInRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        folderName: String
+    ) = GoogleDriveManager.createFolderInRootFolder(account, context, folderName)
 }
