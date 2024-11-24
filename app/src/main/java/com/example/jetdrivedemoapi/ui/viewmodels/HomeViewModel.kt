@@ -5,63 +5,74 @@ import android.content.Context
 import androidx.activity.result.ActivityResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.jetdrivedemoapi.common.models.ListenerEmissionType
 import com.example.jetdrivedemoapi.common.models.TaskResponse
-import com.example.jetdrivedemoapi.common.models.UpdateResponse
+import com.example.jetdrivedemoapi.common.utils.helper.Constants
 import com.example.jetdrivedemoapi.common.utils.manager.SoftwareManager
-import com.example.jetdrivedemoapi.data.google_drive.GoogleDriveManager
+import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
 import com.example.jetdrivedemoapi.domain.repo.HomeRepository
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.tasks.Task
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class HomeViewModel @Inject constructor(private val repo : HomeRepository , private val app: Application) : AndroidViewModel(app) {
+class HomeViewModel @Inject constructor(
+    private val repo: HomeRepository,
+    private val app: Application
+) : AndroidViewModel(app) {
 
     private val _signInDriveStatus = MutableSharedFlow<TaskResponse<GoogleSignInAccount?>>(
-        1 , 64, BufferOverflow.DROP_OLDEST
+        1, 64, BufferOverflow.DROP_OLDEST
     )
 
     val signInDrive get() = _signInDriveStatus.asSharedFlow()
 
+    private val _myGoogleDriveFiles = MutableSharedFlow<TaskResponse<List<DriveItem>>>(
+        1, 64, BufferOverflow.DROP_OLDEST
+    )
 
-    fun singInGoogleDrive(result: ActivityResult)  = viewModelScope.launch(Dispatchers.IO) {
+    val myGoogleDriveFiles get() = _myGoogleDriveFiles.asSharedFlow()
+
+
+    fun singInGoogleDrive(result: ActivityResult) = viewModelScope.launch(Dispatchers.IO) {
         _signInDriveStatus.tryEmit(TaskResponse.Loading())
-        if(SoftwareManager.isNetworkAvailable(app)){
+        if (SoftwareManager.isNetworkAvailable(app)) {
             val response = repo.signInGoogleDrive(result).first()
-            if(response.isSuccess){
+            if (response.isSuccess) {
                 _signInDriveStatus.tryEmit(TaskResponse.Success(response.data))
-            }else{
+            } else {
                 _signInDriveStatus.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
             }
-        }else{
+        } else {
             _signInDriveStatus.tryEmit(TaskResponse.Error("Internet Not Available !"))
         }
     }
 
-    fun singOutGoogleDrive(context : Context)  = viewModelScope.launch(Dispatchers.IO) {
+    fun singOutGoogleDrive(context: Context) = viewModelScope.launch(Dispatchers.IO) {
         _signInDriveStatus.tryEmit(TaskResponse.Loading())
-        if(SoftwareManager.isNetworkAvailable(app)){
+        if (SoftwareManager.isNetworkAvailable(app)) {
             val response = repo.signOutGoogleDrive(context).first()
-            if(response.isSuccess){
+            if (response.isSuccess) {
                 _signInDriveStatus.tryEmit(TaskResponse.Success(response.data))
-            }else{
+            } else {
                 _signInDriveStatus.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
             }
-        }else{
+        } else {
             _signInDriveStatus.tryEmit(TaskResponse.Error("Internet Not Available !"))
         }
     }
 
-    fun returnSingInClient(context : Context) = repo.returnSingInClient(context)
+    fun returnSingInClient(context: Context) = repo.returnSingInClient(context)
 
-    fun checkLoginStatus(context : Context) = viewModelScope.launch(Dispatchers.IO) {
+    fun checkLoginStatus(context: Context) = viewModelScope.launch(Dispatchers.IO) {
         _signInDriveStatus.tryEmit(TaskResponse.Loading())
 
         val account = repo.checkLoginStatus(context)
@@ -69,4 +80,45 @@ class HomeViewModel @Inject constructor(private val repo : HomeRepository , priv
         _signInDriveStatus.tryEmit(TaskResponse.Success(account))
     }
 
+    fun getDriveFilesAndFolders(account: GoogleSignInAccount, context: Context) =
+        viewModelScope.launch(Dispatchers.IO) {
+            _myGoogleDriveFiles.tryEmit(TaskResponse.Loading())
+            if (SoftwareManager.isNetworkAvailable(app)) {
+                repo.getDriveFilesAndFolders(account, context).onEach {
+                    handleDriveEvent(it)
+                }.launchIn(this)
+            } else {
+                _myGoogleDriveFiles.tryEmit(TaskResponse.Error("Internet Not Available !"))
+            }
+        }
+
+
+    private fun handleDriveEvent(response: ListenerEmissionType<DriveItem, DriveItem>) {
+        val myDriveFile =
+            myGoogleDriveFiles.replayCache[0].data?.toMutableList() ?: mutableListOf<DriveItem>()
+
+        when (response.emitChangeType) {
+            Constants.ListenerEmitType.Added -> {
+                if (response.isFirstTimeEmission) {
+                    myDriveFile.clear()
+                }
+
+                if (response.isEmissionForList) {
+                    response.responseList?.let { myDriveFile.addAll(it) }
+                } else {
+                    response.singleResponse?.let { myDriveFile.add(it) }
+                }
+                myDriveFile.sortByDescending { it.createdTime }
+            }
+
+            Constants.ListenerEmitType.Removed -> {
+                // Don't do anything
+            }
+
+            Constants.ListenerEmitType.Modify -> {
+                // don't do anything
+            }
+        }
+        _myGoogleDriveFiles.tryEmit(TaskResponse.Success(myDriveFile))
+    }
 }
