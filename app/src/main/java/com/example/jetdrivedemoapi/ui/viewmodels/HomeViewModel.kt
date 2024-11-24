@@ -2,6 +2,7 @@ package com.example.jetdrivedemoapi.ui.viewmodels
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.activity.result.ActivityResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,11 +43,11 @@ class HomeViewModel @Inject constructor(
 
     val myGoogleDriveFiles get() = _myGoogleDriveFiles.asSharedFlow()
 
-    private val _folderCreate = MutableSharedFlow<TaskResponse<String>>(
+    private val _fileOrFolderCreate = MutableSharedFlow<TaskResponse<String>>(
         0, 64, BufferOverflow.DROP_OLDEST
     )
 
-    val folderCreate get() = _folderCreate.asSharedFlow()
+    val fileOrFolderCreate get() = _fileOrFolderCreate.asSharedFlow()
 
 
     fun singInGoogleDrive(result: ActivityResult) = viewModelScope.launch(Dispatchers.IO) {
@@ -135,27 +136,47 @@ class HomeViewModel @Inject constructor(
         context: Context,
         folderName: String
     ) = viewModelScope.launch(Dispatchers.IO) {
-        _folderCreate.tryEmit(TaskResponse.Loading())
+        _fileOrFolderCreate.tryEmit(TaskResponse.Loading())
 
         if(SoftwareManager.isNetworkAvailable(app)){
             val response = repo.createFolderInRootFolder(account, context, folderName).first()
             if(response.isSuccess){
-                handleFolderCreationInRoot(response.data)
+                handleFolderCreationInRoot(response.data , "Folder Create Successfully !")
             }else{
-                _folderCreate.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
+                _fileOrFolderCreate.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
             }
         }else{
-            _folderCreate.tryEmit(TaskResponse.Error("No Internet Available !"))
+            _fileOrFolderCreate.tryEmit(TaskResponse.Error("No Internet Available !"))
         }
     }
 
-    private fun handleFolderCreationInRoot(response: DriveItem?) {
+    fun uploadFileToRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileUri: Uri
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        _fileOrFolderCreate.tryEmit(TaskResponse.Loading())
+
+        if(SoftwareManager.isNetworkAvailable(app)){
+            val response = repo.uploadFileToRootFolder(account, context, fileUri).first()
+            if(response.isSuccess){
+                handleFolderCreationInRoot(response.data , "File Upload Successfully !")
+            }else{
+                _fileOrFolderCreate.tryEmit(TaskResponse.Error(response.errorMessage.toString()))
+            }
+        }else{
+            _fileOrFolderCreate.tryEmit(TaskResponse.Error("No Internet Available !"))
+        }
+    }
+
+
+    private fun handleFolderCreationInRoot(response: DriveItem? , message : String) {
         val files = myGoogleDriveFiles.replayCache[0].data?.toMutableList() ?: mutableListOf()
 
         if(response ==null){
-            _folderCreate.tryEmit(TaskResponse.Error("Something went wrong !"))
+            _fileOrFolderCreate.tryEmit(TaskResponse.Error("Something went wrong !"))
         }else{
-            _folderCreate.tryEmit(TaskResponse.Success(""))
+            _fileOrFolderCreate.tryEmit(TaskResponse.Success(message))
             files.add(response)
             files.sortByDescending { it.createdTime }
             _myGoogleDriveFiles.tryEmit(TaskResponse.Success(files))

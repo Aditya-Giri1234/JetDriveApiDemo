@@ -1,11 +1,14 @@
 package com.example.jetdrivedemoapi.data.google_drive
 
 import android.content.Context
+import android.net.Uri
 import androidx.activity.result.ActivityResult
 import com.example.jetdrivedemoapi.R
 import com.example.jetdrivedemoapi.common.models.ListenerEmissionType
 import com.example.jetdrivedemoapi.common.models.UpdateResponse
 import com.example.jetdrivedemoapi.common.utils.helper.Constants
+import com.example.jetdrivedemoapi.common.utils.helper.Helper.copyUriToTempFile
+import com.example.jetdrivedemoapi.common.utils.helper.Helper.getFileDetailsFromUri
 import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -14,9 +17,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
+import com.google.api.client.http.FileContent
 import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
+import com.google.api.services.drive.model.File
 import com.google.api.services.drive.model.FileList
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
@@ -127,6 +132,57 @@ object GoogleDriveManager {
             trySend(UpdateResponse(false, null, e.message.toString()))
         }
 
+
+        awaitClose {
+            close()
+        }
+    }
+
+    suspend fun uploadFileToRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileUri: Uri
+    ) = callbackFlow<UpdateResponse<DriveItem?>> {
+        val driveService = createDriveService(account, context)
+
+        try {
+            // Retrieve file details from Uri
+            val fileDetails = context.getFileDetailsFromUri(fileUri)
+
+            // Copy the file to a temporary location
+            val tempFile = context.copyUriToTempFile(fileUri, fileDetails.name)
+
+            // Create metadata for the file
+            val gFile = File().apply {
+                name = fileDetails.name
+                mimeType = fileDetails.mimeType
+                parents = listOf("root") // Upload to My Drive (root folder)
+            }
+
+            // Prepare file content
+            val fileContent = FileContent(fileDetails.mimeType, tempFile)
+
+            // Upload file to Google Drive
+            val uploadedFile = driveService.files()
+                .create(gFile, fileContent)
+                .setFields("id, name, mimeType, size, createdTime, modifiedTime")
+                .execute()
+
+            // Map the uploaded file details to DriveItem
+            val item = DriveItem(
+                id = uploadedFile.id,
+                name = uploadedFile.name,
+                mimeType = uploadedFile.mimeType,
+                size = uploadedFile.size.toLong(),
+                createdTime = uploadedFile.createdTime.toString(),
+                modifiedTime = uploadedFile.modifiedTime.toString()
+            )
+
+            trySend(UpdateResponse(true, item))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            trySend(UpdateResponse(false, null, e.message.toString()))
+        }
 
         awaitClose {
             close()

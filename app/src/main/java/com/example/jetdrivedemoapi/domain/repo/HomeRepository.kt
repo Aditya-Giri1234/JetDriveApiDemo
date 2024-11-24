@@ -1,6 +1,7 @@
 package com.example.jetdrivedemoapi.domain.repo
 
 import android.content.Context
+import android.net.Uri
 import androidx.activity.result.ActivityResult
 import com.example.jetdrivedemoapi.data.google_drive.GoogleDriveManager
 import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
@@ -22,4 +23,10 @@ class HomeRepository @Inject constructor() {
         context: Context,
         folderName: String
     ) = GoogleDriveManager.createFolderInRootFolder(account, context, folderName)
+
+    suspend fun uploadFileToRootFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileUri: Uri
+    ) = GoogleDriveManager.uploadFileToRootFolder(account, context, fileUri)
 }

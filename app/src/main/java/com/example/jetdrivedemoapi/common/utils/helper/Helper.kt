@@ -1,6 +1,8 @@
 package com.example.jetdrivedemoapi.common.utils.helper
 
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -16,6 +18,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.jetdrivedemoapi.domain.models.drive.FileDetails
 import com.example.jetdrivedemoapi.ui.theme.ArchivePink
 import com.example.jetdrivedemoapi.ui.theme.AudioIndigo
 import com.example.jetdrivedemoapi.ui.theme.DocumentPurple
@@ -26,6 +29,8 @@ import com.example.jetdrivedemoapi.ui.theme.PresentationAmber
 import com.example.jetdrivedemoapi.ui.theme.SpreadsheetGreen
 import com.example.jetdrivedemoapi.ui.theme.UnknownGrey
 import com.example.jetdrivedemoapi.ui.theme.VideoBlue
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.time.Duration
 
 object Helper {
@@ -94,5 +99,38 @@ object Helper {
         }
     }
 
+    fun Context.getFileDetailsFromUri(uri: Uri): FileDetails {
+        var fileName: String =""
+        var fileSize: Long? = null
+
+
+        // Retrieve file name and size
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                fileName = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) ?: ""
+                fileSize = cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE))
+            }
+        }
+
+        // Retrieve MIME type
+        val mimeType = contentResolver.getType(uri)
+
+        return FileDetails(
+            name = fileName,
+            mimeType = mimeType,
+            size = fileSize ,
+            uri = uri
+        )
+    }
+
+    fun Context.copyUriToTempFile(uri: Uri, fileName: String): File {
+        val tempFile = File(cacheDir, fileName)
+        contentResolver.openInputStream(uri).use { inputStream ->
+            FileOutputStream(tempFile).use { outputStream ->
+                inputStream?.copyTo(outputStream)
+            }
+        }
+        return tempFile
+    }
 
 }
