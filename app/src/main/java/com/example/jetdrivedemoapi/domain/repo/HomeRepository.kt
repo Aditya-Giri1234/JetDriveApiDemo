@@ -31,4 +31,29 @@ class HomeRepository @Inject constructor() {
         fileUri: Uri,
         parentFolderId : String?=null
     ) = GoogleDriveManager.uploadFileToRootFolder(account, context, fileUri,parentFolderId)
+
+    suspend fun moveToTrash(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileId: String
+    ) = GoogleDriveManager.moveToTrash(account, context, fileId)
+
+    suspend fun recoverFromTrash(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileId: String
+    ) = GoogleDriveManager.recoverFromTrash(account, context, fileId)
+
+
+    suspend fun deleteFileOrFolder(
+        account: GoogleSignInAccount,
+        context: Context,
+        fileId: String
+    ) = GoogleDriveManager.deleteFileOrFolder(account, context, fileId)
+
+    suspend fun getAllFilesFromTrash(
+        account: GoogleSignInAccount,
+        context: Context
+    ) = GoogleDriveManager.getAllFilesFromTrash(account,context)
+
 }

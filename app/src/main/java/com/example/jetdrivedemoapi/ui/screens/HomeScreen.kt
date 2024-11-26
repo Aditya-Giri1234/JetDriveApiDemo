@@ -4,11 +4,14 @@ import android.app.Activity.RESULT_OK
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FabPosition
@@ -58,10 +62,12 @@ import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
 import com.example.jetdrivedemoapi.ui.components.common.MyTopBar
 import com.example.jetdrivedemoapi.ui.components.common.wrapper.IconWithoutDesc
 import com.example.jetdrivedemoapi.ui.navigation.AppNavigationScreens
+import com.example.jetdrivedemoapi.ui.theme.FolderGreen
 import com.example.jetdrivedemoapi.ui.viewmodels.HomeViewModel
+import com.example.jetdrivedemoapi.ui.widgets.home.FileActionDialog
+import com.example.jetdrivedemoapi.ui.widgets.home.FileOperation
 import com.example.jetdrivedemoapi.ui.widgets.home.FolderOrFileCreateDialog
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.api.services.drive.Drive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +90,7 @@ fun HomeScreen(
         mutableStateOf(false)
     }
     val signInStatus = homeViewModel.signInDrive.collectAsStateWithLifecycle(TaskResponse.Initial())
+    val fileOperation = homeViewModel.fileOperation.collectAsStateWithLifecycle(TaskResponse.Initial())
     val myDriveFiles =
         homeViewModel.myGoogleDriveFiles.collectAsStateWithLifecycle(TaskResponse.Initial())
     val account = remember(signInStatus.value) {
@@ -119,7 +126,7 @@ fun HomeScreen(
                 parentFolderId.value = folderPathArray.value[folderPathArray.value.size - 1]
             }
             else->{
-                navController.navigateUp()
+                navController.popBackStack()
             }
         }
     }
@@ -130,6 +137,9 @@ fun HomeScreen(
                 screenName = AppNavigationScreens.HomeScreen,
                 signInStatus = signInStatus.value.data,
                 navController = navController,
+                onSync = {
+                    homeViewModel.getDriveFilesAndFolders(account.value!!,context , parentFolderId.value.id)
+                }
             ) {
                 if (signInStatus.value.data == null) {
                     singInResult.launch(homeViewModel.returnSingInClient(context).signInIntent)
@@ -142,7 +152,7 @@ fun HomeScreen(
             if(account.value!=null){
                 FloatingActionButton(onClick = {
                     isFolderCreationOn.value = true
-                } , shape = CircleShape , containerColor = Color.Magenta) {
+                } , shape = CircleShape , containerColor = FolderGreen) {
                     IconWithoutDesc(Icons.Filled.Add , tint = Color.White)
                 }
             }
@@ -150,30 +160,38 @@ fun HomeScreen(
         floatingActionButtonPosition = FabPosition.End
     ) { innerPadding ->
         Surface(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.Top,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                FolderView(folderPathArray)
-                TopAppBarSetUp(navController, signInStatus, homeViewModel)
-                MainContent(navController, homeViewModel, myDriveFiles){item ->
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp) , contentAlignment = Alignment.Center){
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.Top,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    FolderView(folderPathArray)
+                    TopAppBarSetUp(navController, signInStatus, homeViewModel)
+                    MainContent(navController, homeViewModel, myDriveFiles , account){item ->
 //                    homeViewModel.getDriveFilesAndFolders(account.value!!,context,item.id)
-                    folderPathArray.value+=item
-                    parentFolderId.value=item
+                        folderPathArray.value+=item
+                        parentFolderId.value=item
+                    }
+                    if(isFolderCreationOn.value){
+                        FolderOrFileCreateDialog(account = account.value!!,homeViewModel , parentFolderId, onDismiss = {
+                            isFolderCreationOn.value = false
+                        } )
+                    }
+
                 }
-                if(isFolderCreationOn.value){
-                    FolderOrFileCreateDialog(account = account.value!!,homeViewModel , parentFolderId, onDismiss = {
-                        isFolderCreationOn.value = false
-                    } )
-                }
+                FileOperation(fileOperation)
             }
+
         }
 
     }
 }
+
+
 
 @Composable
 fun ColumnScope.FolderView(folderPathArray: State<Array<DriveItem>>) {
@@ -192,14 +210,21 @@ fun ColumnScope.FolderView(folderPathArray: State<Array<DriveItem>>) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun ColumnScope.MainContent(
+private fun ColumnScope.MainContent(
     navController: NavController,
     homeViewModel: HomeViewModel,
     myDriveFiles: State<TaskResponse<List<DriveItem>>>,
-    onFolderClick : (item : DriveItem) -> Unit
+    account: State<GoogleSignInAccount?>,
+    onFolderClick: (item: DriveItem) -> Unit
 ) {
+    val context  = LocalContext.current
+    // The dialog state
+    val openDialog = remember { mutableStateOf(false) }
+    val fileId = remember {
+        mutableStateOf("")
+    }
     when (val response = myDriveFiles.value) {
         is TaskResponse.Initial -> {
             Text(
@@ -217,44 +242,64 @@ fun ColumnScope.MainContent(
                     )
                 )
             } else {
-                LazyVerticalGrid(
-                    modifier = Modifier.fillMaxSize(),
-                    columns = GridCells.Fixed(3),
-                    state = rememberLazyGridState(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    reverseLayout = false,
-                    userScrollEnabled = true,
-                    flingBehavior = ScrollableDefaults.flingBehavior()
-                ) {
-                    items(response.data , key = {it.id}) { item ->
-                        Column(
-                            modifier = Modifier.fillMaxSize().safeClick {
-                                if(item.isFolder){
-                                    onFolderClick(item)
-                                }
-                            },
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            IconWithoutDesc(
-                                Helper.getFileIcon(item.name,item.mimeType),
-                                tint = Helper.getFileTint(item.name,item.mimeType).copy(alpha = .7f),
-                                Modifier.size(80.dp)
-                            )
-                            Text(
-                                item.name,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = FontWeight.Bold
+                Box {
+                    if(openDialog.value){
+                        FileActionDialog(homeViewModel,account
+                            .value!!,fileId.value , openDialog)
+                    }
+                    LazyVerticalGrid(
+                        modifier = Modifier.fillMaxSize(),
+                        columns = GridCells.Fixed(3),
+                        state = rememberLazyGridState(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        reverseLayout = false,
+                        userScrollEnabled = true,
+                        flingBehavior = ScrollableDefaults.flingBehavior()
+                    ) {
+                        items(response.data , key = {it.id}) { item ->
+                            Column(
+                                modifier = Modifier.fillMaxSize().combinedClickable(
+                                    interactionSource = remember {
+                                        MutableInteractionSource()
+                                    } ,
+                                    indication = null,
+                                    onLongClick = {
+                                       openDialog.value = true
+                                        fileId.value = item.id
+                                    } ,
+                                    onClick = {
+                                        safeClick {
+                                            if(item.isFolder){
+                                                onFolderClick(item)
+                                            }else{
+                                                Helper.openDriveFile(account = account.value!! , context , item.id)
+                                            }
+                                        }
+                                    },
                                 ),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .padding(horizontal = 5.dp)
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                textAlign = TextAlign.Center
-                            )
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                IconWithoutDesc(
+                                    Helper.getFileIcon(item.name,item.mimeType),
+                                    tint = Helper.getFileTint(item.name,item.mimeType).copy(alpha = .7f),
+                                    Modifier.size(80.dp)
+                                )
+                                Text(
+                                    item.name,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .padding(horizontal = 5.dp)
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
@@ -286,7 +331,7 @@ fun ColumnScope.MainContent(
 }
 
 @Composable
-fun ColumnScope.TopAppBarSetUp(
+private fun ColumnScope.TopAppBarSetUp(
     navController: NavController,
     signInStatus: State<TaskResponse<GoogleSignInAccount?>>,
     homeViewModel: HomeViewModel
@@ -316,7 +361,7 @@ fun ColumnScope.TopAppBarSetUp(
 fun ColumnScope.InitialView() {
     Text(
         "User Validation Ongoing , please wait ...",
-        style = MaterialTheme.typography.displayLarge.copy(
+        style = MaterialTheme.typography.titleLarge.copy(
             color = Color.Black,
             fontWeight = FontWeight.Bold
         )

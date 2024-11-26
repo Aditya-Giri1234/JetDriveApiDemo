@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.jetdrivedemoapi.data.google_drive.GoogleDriveManager
 import com.example.jetdrivedemoapi.domain.models.drive.DriveItem
 import com.example.jetdrivedemoapi.domain.models.drive.FileDetails
 import com.example.jetdrivedemoapi.ui.theme.ArchivePink
@@ -30,6 +31,7 @@ import com.example.jetdrivedemoapi.ui.theme.PresentationAmber
 import com.example.jetdrivedemoapi.ui.theme.SpreadsheetGreen
 import com.example.jetdrivedemoapi.ui.theme.UnknownGrey
 import com.example.jetdrivedemoapi.ui.theme.VideoBlue
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.time.Duration
@@ -137,5 +139,8 @@ object Helper {
     fun getFolderPathFromArray(array: Array<DriveItem>) = array.joinToString(separator = " > "){
         it.name
     }
+
+
+    fun openDriveFile(account: GoogleSignInAccount, context: Context, fileId: String) = GoogleDriveManager.openDriveFile(account, context, fileId)
 
 }
