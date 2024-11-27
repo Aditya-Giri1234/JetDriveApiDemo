@@ -37,3 +37,13 @@ fun Modifier.safeClick(
         }
     }
 }
+
+fun safeClick(
+    onClick: () -> Unit
+){
+    val currentTimeInMillis = System.currentTimeMillis()
+    if (currentTimeInMillis - lastClickTimeInMillis > Constants.SAFE_CLICK_DELAY) {
+        lastClickTimeInMillis = currentTimeInMillis
+        onClick()
+    }
+}
