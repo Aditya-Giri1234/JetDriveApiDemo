@@ -92,20 +92,12 @@ dependencies {
     //Navigation
     implementation(libs.androidx.navigation.compose)
 
-    //Coil
-    implementation(libs.coil.compose)
 
     //For Compose Runtime Lifecycle support (collectAsStateWithLifecyle())
     implementation(libs.androidx.lifecycle.runtime.compose)
 
-    //retrofit
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.gson)
-    implementation(libs.okhttp)
-    implementation(libs.okhttp.logging)
 
-
-//    //Hilt
+    //Hilt
     implementation(libs.hilt)
     implementation(libs.hilt.navigation.compse)
     ksp(libs.hilt.ksp)
@@ -113,11 +105,6 @@ dependencies {
     //Kotlin - Serialization
     implementation(libs.kotlin.serialization)
 
-    //Kotlin - reflection
-    api(libs.kotlin.reflect)
-
-    //Data Store Preference
-    implementation(libs.datastore)
 
     //gauva
     implementation(libs.gauva)
