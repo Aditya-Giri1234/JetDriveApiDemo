@@ -34,6 +34,12 @@ This project demonstrates the integration of the **Google Drive API** in an Andr
    - Click on **Create Credentials** and choose **OAuth 2.0 Client IDs**.
    - Add your app's **Package Name** and **SHA1 Key** in the credentials configuration.
 
+4. **Set Up OAuth Consent Screen**:  
+   - Go to **API & Services > OAuth consent screen**.  
+   - Add the email address of test users (e.g., the email you use to log in from the app).  
+   - Save and proceed to use the API in your application.
+
+
 ---
 
 ### Android-Side Setup
